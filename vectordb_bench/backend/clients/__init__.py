@@ -40,6 +40,7 @@ class DB(Enum):
     AliyunElasticsearch = "AliyunElasticsearch"
     Test = "test"
     AliyunOpenSearch = "AliyunOpenSearch"
+    MyScale = "myscale"
 
 
     @property
