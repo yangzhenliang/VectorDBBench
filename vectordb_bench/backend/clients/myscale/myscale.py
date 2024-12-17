@@ -97,7 +97,6 @@ class Myscale(VectorDB):
         """
         MYSCALE_BATCH_SIZE = 500
         try:
-            client = self.get_client()
             for offset in range(0, len(embeddings), MYSCALE_BATCH_SIZE):
                 vectors = embeddings[offset: offset + MYSCALE_BATCH_SIZE]
                 ids = metadata[offset: offset + MYSCALE_BATCH_SIZE]
@@ -105,6 +104,7 @@ class Myscale(VectorDB):
                     (id, vector, id)
                     for id, vector in zip(ids, vectors)
                 ]
+                client = self.get_client()
                 _ = client.insert(
                     table=self.collection_name,
                     data=data,
