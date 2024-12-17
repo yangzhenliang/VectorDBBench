@@ -111,7 +111,7 @@ class Myscale(VectorDB):
                     column_type_names=['UInt32', 'Array(Float32)', 'UInt32'],
                     column_names=['id', 'data', 'pk']
                 )
-            client = None
+                client = None
         except Exception as e:
             log.info(f"Failed to insert data, {e}")
         return (len(embeddings), None)
