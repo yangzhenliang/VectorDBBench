@@ -30,25 +30,21 @@ class Myscale(VectorDB):
         self._primary_field = "pk"
         self._vector_field = "vector"
 
-        tmp_client = clickhouse_connect.get_client(host=host_myscale, port=port_myscale, user='admin',
-                                                   password='moqi.ai')
+        client = self.get_client()
         if drop_old:
             log.info(f"Myscale client drop_old collection: {self.collection_name}")
-            tmp_client.command("DROP TABLE IF EXISTS  " + self.collection_name)
-            self._create_collection(dim, tmp_client)
-        tmp_client = None
+            client.command("DROP TABLE IF EXISTS  " + self.collection_name)
+            self._create_collection(dim, client)
         log.info("Starting Myscale DB")
 
     @contextmanager
     def init(self) -> Generator[None, None, None]:
         """create and destroy connections to database.
-
         Examples:
             >>> with self.init():
             >>>     self.insert_embeddings()
         """
-        self.client = clickhouse_connect.get_client(host=host_myscale, port=port_myscale, user='admin',
-                                                    password='moqi.ai')
+        self.client = self.get_client()
         yield
         self.client = None
         del (self.client)
@@ -59,8 +55,14 @@ class Myscale(VectorDB):
     def optimize(self) -> None:
         pass
 
+    def get_client(self):
+        client = clickhouse_connect.get_client(host=host_myscale, port=port_myscale, user='admin',
+                                               password='moqi.ai')
+        return client
+
     def _create_collection(self, dim, client: int):
         log.info(f"Create collection: {self.collection_name}")
+        client = self.get_client()
         client.command(f"""
                 CREATE TABLE default.{self.collection_name}
                 (
@@ -73,6 +75,8 @@ class Myscale(VectorDB):
 
         client.command(
             f"""ALTER TABLE default.{self.collection_name} ADD VECTOR INDEX vec_idx data TYPE MSTG('metric_type=Cosine')""")
+        self.client = None
+        del (self.client)
         try:
             pass
 
@@ -93,6 +97,7 @@ class Myscale(VectorDB):
         """
         MYSCALE_BATCH_SIZE = 500
         try:
+            client = self.get_client()
             for offset in range(0, len(embeddings), MYSCALE_BATCH_SIZE):
                 vectors = embeddings[offset: offset + MYSCALE_BATCH_SIZE]
                 ids = metadata[offset: offset + MYSCALE_BATCH_SIZE]
@@ -100,12 +105,13 @@ class Myscale(VectorDB):
                     (id, vector, id)
                     for id, vector in zip(ids, vectors)
                 ]
-                _ = self.client.insert(
+                _ = client.insert(
                     table=self.collection_name,
                     data=data,
                     column_type_names=['UInt32', 'Array(Float32)', 'UInt32'],
                     column_names=['id', 'data', 'pk']
                 )
+            client = None
         except Exception as e:
             log.info(f"Failed to insert data, {e}")
         return (len(embeddings), None)
@@ -118,13 +124,15 @@ class Myscale(VectorDB):
             timeout: int | None = None,
             **kwargs: Any,
     ) -> list[int]:
+        client = self.get_client()
         sql = f"""
             SELECT id, pk, distance(data, {query}) as dist 
             FROM default.{self.collection_name}
             """
         if filters:
-            sql += f"WHERE id>{filters.get('id')}"
+            sql += f" WHERE id>{filters.get('id')}"
         sql += f" ORDER BY dist LIMIT {k}"
-        result = self.client.query(sql)
+        result = client.query(sql)
         ret = [row['id'] for row in result.named_results()]
+        client = None
         return ret
