@@ -30,8 +30,8 @@ class Myscale(VectorDB):
         self._primary_field = "pk"
         self._vector_field = "vector"
 
-        client = self.get_client()
         if drop_old:
+            client = self.get_client()
             log.info(f"Myscale client drop_old collection: {self.collection_name}")
             client.command("DROP TABLE IF EXISTS  " + self.collection_name)
             self._create_collection(dim, client)
@@ -77,6 +77,7 @@ class Myscale(VectorDB):
             f"""ALTER TABLE default.{self.collection_name} ADD VECTOR INDEX vec_idx data TYPE MSTG('metric_type=Cosine')""")
         self.client = None
         del (self.client)
+        client.close()
         try:
             pass
 
@@ -96,6 +97,7 @@ class Myscale(VectorDB):
         Should call self.init() first.
         """
         MYSCALE_BATCH_SIZE = 500
+        client = self.get_client()
         try:
             for offset in range(0, len(embeddings), MYSCALE_BATCH_SIZE):
                 vectors = embeddings[offset: offset + MYSCALE_BATCH_SIZE]
@@ -104,16 +106,18 @@ class Myscale(VectorDB):
                     (id, vector, id)
                     for id, vector in zip(ids, vectors)
                 ]
-                client = self.get_client()
+
                 _ = client.insert(
                     table=self.collection_name,
                     data=data,
                     column_type_names=['UInt32', 'Array(Float32)', 'UInt32'],
                     column_names=['id', 'data', 'pk']
                 )
-                client = None
         except Exception as e:
             log.info(f"Failed to insert data, {e}")
+        finally:
+            client.close()
+            client = None
         return (len(embeddings), None)
 
     def search_embedding(
@@ -134,5 +138,6 @@ class Myscale(VectorDB):
         sql += f" ORDER BY dist LIMIT {k}"
         result = client.query(sql)
         ret = [row['id'] for row in result.named_results()]
+        client.close()
         client = None
         return ret
